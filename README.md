@@ -1,131 +1,103 @@
-# Vapi Custom TTS Server - Google Cloud TTS for Thai
+# Vapi Custom TTS Server - Google Cloud TTS for Thai (OAuth 2.0)
 
-A custom TTS server that enables Vapi to use Google Cloud Text-to-Speech for high-quality Thai language voice synthesis.
+A high-performance custom TTS server that enables Vapi to use Google Cloud Text-to-Speech for natural Thai language synthesis. This implementation uses **OAuth 2.0** and direct REST API calls for maximum control and reliability.
 
-## Features
+## 🚀 Features
 
-- 🇹🇭 **Thai Language Support** - Neural2 voices for natural Thai speech
-- ⚡ **Real-time** - Optimized for Vapi's real-time call requirements
-- 🔌 **n8n Compatible** - Trigger Vapi calls via webhooks (see [N8N_INTEGRATION.md](./N8N_INTEGRATION.md))
+- 🇹🇭 **Thai Language Support** - Optimized for `th-TH-Neural2-C` (high quality).
+- 🔐 **OAuth 2.0 Authentication** - Secure, token-based authentication (no more JSON key files).
+- ⚡ **REST API Integration** - Direct calls to Google's TTS engine for low latency.
+- 🤖 **Auto-Assistant Creation** - Includes a script to automatically create your Vapi agent.
 
-## Quick Start
+---
 
-### 1. Set Up Google Cloud
+## 🛠️ Setup Guide
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project or select existing
-3. Enable **Text-to-Speech API**: Search for it in the API Library
-4. Create a Service Account:
-   - Go to **IAM & Admin** → **Service Accounts**
-   - Click **Create Service Account**
-   - Grant role: **Cloud Text-to-Speech User**
-   - Create JSON key and download it
+### 1. Google Cloud Configuration
 
-### 2. Configure Environment
+1.  Go to the **[Google Cloud Console](https://console.cloud.google.com)**.
+2.  Enable the **Text-to-Speech API**.
+3.  Go to **APIs & Services > Credentials**.
+4.  Click **Create Credentials > OAuth client ID**.
+    - **Application type:** Web application.
+    - **Name:** Vapi TTS Server.
+    - **Authorized redirect URIs:** Add `http://localhost:3001/oauth2callback`.
+5.  Copy your **Client ID** and **Client Secret**.
 
+### 2. Environment Setup
+
+Create a `.env` file from the example:
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Fill in these required variables:
+- `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID.
+- `GOOGLE_CLIENT_SECRET`: Your Google OAuth Client Secret.
+- `VAPI_API_KEY`: Your **Private** API key from [Vapi Dashboard](https://dashboard.vapi.ai/account).
+
+### 3. Generate Refresh Token
+
+Run the included helper script to authorize your app:
 ```bash
-GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
-GOOGLE_VOICE_NAME=th-TH-Neural2-C
+node get-refresh-token.js
 ```
+- A browser window will open. Sign in with your Google account.
+- If you see "Google hasn't verified this app", click **Advanced > Go to Vapi TTS Server (unsafe)**.
+- Once completed, copy the `GOOGLE_REFRESH_TOKEN` printed in your terminal and add it to your `.env`.
 
-Place your downloaded JSON key as `google-credentials.json` in the project root.
+---
 
-### 3. Install & Run
+## 🤖 Create Vapi Assistant
 
-```bash
-npm install
-npm start
-```
+I have provided a script that creates a pre-configured Vapi assistant with the Thai voice setup correctly.
 
-## Deployment
+1.  Start your server (or deploy to Railway).
+2.  Run the command:
+    ```bash
+    # If running locally:
+    node create-vapi-assistant.js http://localhost:3000
 
-### Railway (Recommended)
+    # If already on Railway:
+    node create-vapi-assistant.js https://your-app.up.railway.app
+    ```
+3.  Check your [Vapi Dashboard](https://dashboard.vapi.ai/assistants). You will see a new assistant named **"Google Thai Voice (Custom TTS)"**.
 
-1. Push code to GitHub
-2. Create project on [Railway](https://railway.app)
-3. Add environment variables:
-   - Add contents of `google-credentials.json` as `GOOGLE_APPLICATION_CREDENTIALS_JSON`
-   - Or set up Google Cloud service account differently
-4. Deploy!
+---
 
-> **Note**: For Railway, you'll need to modify the code to read credentials from environment variable instead of file. See Railway docs for Google Cloud authentication.
+## 🧪 Testing & Verification
 
-### Docker
-
-```bash
-docker build -t vapi-tts .
-docker run -p 3000:3000 \
-  -v /path/to/google-credentials.json:/app/google-credentials.json \
-  -e GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials.json \
-  -e GOOGLE_VOICE_NAME=th-TH-Neural2-C \
-  vapi-tts
-```
-
-## Configure Vapi
-
-In your Vapi assistant configuration:
-
-```json
-{
-  "voice": {
-    "provider": "custom-voice",
-    "server": {
-      "url": "https://your-server.railway.app/api/synthesize",
-      "secret": "your_vapi_secret",
-      "timeoutSeconds": 45
-    }
-  }
-}
-```
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Server info |
-| `/health` | GET | Health check |
-| `/api/synthesize` | POST | TTS endpoint (Vapi calls this) |
-
-## Testing
+### Local Test
+Once your `.env` is ready and server is running (`npm start`):
 
 ```bash
-# Health check
-curl http://localhost:3000/health
-
-# Test TTS (Thai text)
+# Test synthesis (outputs test.pcm)
 curl -X POST http://localhost:3000/api/synthesize \
   -H "Content-Type: application/json" \
-  -d '{"message":{"type":"voice-request","text":"สวัสดีครับ ยินดีต้อนรับ","sampleRate":24000}}' \
+  -d '{"message":{"type":"voice-request","text":"สวัสดีครับ","sampleRate":24000}}' \
   --output test.pcm
-
-# Play the audio (requires ffplay)
-ffplay -f s16le -ar 24000 -ac 1 test.pcm
 ```
 
-## Thai Voice Options
+### Deploying to Railway
+1. Push this repository to GitHub.
+2. Connect it to [Railway](https://railway.app).
+3. Add all your `.env` variables to the Railway "Variables" tab.
+4. Railway will automatically detect the `package.json` and start the server.
 
-| Voice Name | Type | Gender | Quality |
-|------------|------|--------|---------|
-| th-TH-Neural2-C | Neural2 | Female | High (recommended) |
-| th-TH-Standard-A | Standard | Female | Good (lower cost) |
+---
 
-## Troubleshooting
+## 📂 Project Structure
 
-### Authentication Errors
-- Verify `GOOGLE_APPLICATION_CREDENTIALS` path is correct
-- Check service account has Text-to-Speech permissions
-- Ensure JSON key file exists and is readable
+- `server.js`: The main Express server handling Vapi's TTS requests.
+- `get-refresh-token.js`: Helper for Google OAuth authorization.
+- `create-vapi-assistant.js`: API script to create your Vapi agent.
+- `.env.example`: Template for credentials.
 
-### No Audio Output
-- Check server logs for Google API errors
-- Verify Thai text is being sent correctly
-- Test with simple Thai text: "สวัสดี"
+## ❓ Troubleshooting
+
+- **401 Unauthorized (Vapi):** Make sure you are using the **Private** API key, not the public one.
+- **invalid_client (Google):** Double-check your `GOOGLE_CLIENT_SECRET` for extra spaces.
+- **redirect_uri_mismatch:** Ensure Google Console has `http://localhost:3001/oauth2callback` exactly.
 
 ## License
-
 MIT

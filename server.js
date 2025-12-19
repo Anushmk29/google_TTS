@@ -44,6 +44,10 @@ const VOICE_NAME = process.env.GOOGLE_VOICE_NAME || 'th-TH-Neural2-C';
 const LANGUAGE_CODE = process.env.GOOGLE_LANGUAGE_CODE || 'th-TH';
 const VAPI_SECRET = process.env.VAPI_SECRET;
 
+// In-memory cache for commonly used audio phrases
+// Key: md5(text + sampleRate)
+const ttsCache = new Map();
+
 // Secret validation middleware (per VAPI docs)
 function validateSecret(req, res, next) {
   if (VAPI_SECRET) {
@@ -154,12 +158,24 @@ app.post('/api/synthesize', validateSecret, logVapiRequest, async (req, res) => 
     // Preprocess text (handles SSML and character cleaning)
     const processedText = preprocessText(text);
 
-    console.log(
-      `Synthesizing: ${requestId}, text="${processedText.substring(0, 50)}...", rate=${sampleRate}Hz, voice=${VOICE_NAME}`
-    );
+    // Check cache first for high performance
+    const cacheKey = crypto.createHash('md5').update(`${processedText}:${sampleRate}`).digest('hex');
+    let audioBuffer = ttsCache.get(cacheKey);
 
-    // Generate the audio with Google Cloud TTS
-    const audioBuffer = await synthesizeAudio(processedText, sampleRate);
+    if (audioBuffer) {
+      console.log(`Cache HIT for ${requestId}: "${processedText.substring(0, 30)}..."`);
+    } else {
+      console.log(
+        `Cache MISS for ${requestId}: "${processedText.substring(0, 30)}...", rate=${sampleRate}Hz`
+      );
+      // Generate the audio with Google Cloud TTS
+      audioBuffer = await synthesizeAudio(processedText, sampleRate);
+
+      // Save it to cache
+      if (audioBuffer && audioBuffer.length > 0) {
+        ttsCache.set(cacheKey, audioBuffer);
+      }
+    }
 
     if (!audioBuffer || audioBuffer.length === 0) {
       throw new Error('TTS synthesis produced no audio');
@@ -236,10 +252,32 @@ app.use((error, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`TTS server listening on port ${PORT}`);
   console.log(`Using Google Cloud TTS with voice: ${VOICE_NAME}`);
-  console.log(`Language: ${LANGUAGE_CODE}`);
+
+  // Pre-cache common greetings to eliminate startup latency
+  const greetings = [
+    "สวัสดีค่ะ ดิฉันชื่อโซเฟีย มีอะไรให้ช่วยไหมคะ?",
+    "สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ?",
+    "สวัสดีค่ะ"
+  ];
+
+  console.log('Pre-caching common greetings...');
+  for (const text of greetings) {
+    try {
+      // Pre-cache for standard Vapi sample rates (usually 24000 or 8000)
+      for (const rate of [24000, 8000]) {
+        const processedText = preprocessText(text);
+        const cacheKey = crypto.createHash('md5').update(`${processedText}:${rate}`).digest('hex');
+        const audio = await synthesizeAudio(processedText, rate);
+        ttsCache.set(cacheKey, audio);
+      }
+    } catch (e) {
+      console.warn(`Failed to pre-cache phrase: "${text}" - ${e.message}`);
+    }
+  }
+  console.log('Pre-caching complete. Server is warm and ready!');
 });
 
 module.exports = app;
