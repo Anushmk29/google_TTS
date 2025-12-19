@@ -1,0 +1,47 @@
+# OAuth 2.0 REST-based TTS Implementation Plan
+
+The user wants to use OAuth 2.0 (Client ID/Secret) and manual REST calls to `texttospeech.googleapis.com` for better control and to avoid Service Account setup issues.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Fixing `Error 400: redirect_uri_mismatch`**
+>
+> Your Google Cloud setup needs to allow the specific URL our script uses.
+>
+> 1. Go to [Google Cloud Console > Credentials](https://console.cloud.google.com/apis/credentials).
+> 2. Click on the **name** of your OAuth 2.0 Client ID.
+> 3. Scroll down to **Authorized redirect URIs**.
+> 4. Click **ADD URI** and paste: `http://localhost:3001/oauth2callback`.
+> 5. Click **SAVE** at the bottom.
+>
+> **Wait 1-2 minutes**, then try running `node get-refresh-token.js` again.
+
+## Proposed Changes
+
+### [Component] Authentication & API Layer
+
+#### [MODIFY] [package.json](file:///d:/Autonoetic_edge/vapi-tts-server/package.json)
+- Add `googleapis` and `dotenv` to dependencies.
+- Add `open` for the token script.
+
+#### [MODIFY] [server.js](file:///d:/Autonoetic_edge/vapi-tts-server/server.js)
+- Replace `@google-cloud/text-to-speech` library usage with `axios` or `node-fetch` and manual token management.
+- Use `google-auth-library` to exchange the refresh token for a fresh access token.
+- Implement the POST request to `https://texttospeech.googleapis.com/v1/text:synthesize`.
+
+#### [MODIFY] [.env.example](file:///d:/Autonoetic_edge/vapi-tts-server/.env.example)
+- Add OAuth 2.0 environment variables.
+
+#### [NEW] [get-refresh-token.js](file:///d:/Autonoetic_edge/vapi-tts-server/get-refresh-token.js)
+- A helper script to let the user authorize the app and generate a `GOOGLE_REFRESH_TOKEN`.
+
+## Verification Plan
+
+### Automated Tests
+- Run `node get-refresh-token.js` to verify token generation.
+- Run `npm start` and test a synthesis request.
+
+### Manual Verification
+- Verify that the server can successfully retrieve an access token using the refresh token.
+- Verify audio output from the REST API.
