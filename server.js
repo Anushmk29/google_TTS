@@ -184,14 +184,15 @@ app.post('/api/synthesize', validateSecret, logVapiRequest, async (req, res) => 
     clearTimeout(timeout);
 
     // Return raw PCM audio to VAPI
-    res.setHeader('Content-Type', 'application/octet-stream');
+    // Vapi documentation recommends specific audio/l16 content type for PCM
+    res.setHeader('Content-Type', `audio/l16; rate=${sampleRate}`);
     res.setHeader('Content-Length', audioBuffer.length);
     res.write(audioBuffer);
     res.end();
 
     const duration = Date.now() - startTime;
     console.log(
-      `TTS completed: ${requestId}, ${duration}ms, ${audioBuffer.length} bytes`
+      `[SUCCESS] TTS ${requestId}: Served ${audioBuffer.length} bytes in ${duration}ms (Text: "${processedText.substring(0, 40)}...")`
     );
 
   } catch (error) {
@@ -263,21 +264,26 @@ app.listen(PORT, async () => {
     "สวัสดีค่ะ"
   ];
 
-  console.log('Pre-caching common greetings...');
-  for (const text of greetings) {
-    try {
-      // Pre-cache for standard Vapi sample rates (usually 24000 or 8000)
-      for (const rate of [24000, 8000]) {
-        const processedText = preprocessText(text);
-        const cacheKey = crypto.createHash('md5').update(`${processedText}:${rate}`).digest('hex');
-        const audio = await synthesizeAudio(processedText, rate);
-        ttsCache.set(cacheKey, audio);
+  console.log('Pre-caching common greetings (in background)...');
+
+  // Run pre-caching without awaiting to avoid blocking server start
+  (async () => {
+    for (const text of greetings) {
+      try {
+        for (const rate of [24000, 16000, 8000]) {
+          const processedText = preprocessText(text);
+          const cacheKey = crypto.createHash('md5').update(`${processedText}:${rate}`).digest('hex');
+          if (!ttsCache.has(cacheKey)) {
+            const audio = await synthesizeAudio(processedText, rate);
+            ttsCache.set(cacheKey, audio);
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed to pre-cache phrase: "${text}" - ${e.message}`);
       }
-    } catch (e) {
-      console.warn(`Failed to pre-cache phrase: "${text}" - ${e.message}`);
     }
-  }
-  console.log('Pre-caching complete. Server is warm and ready!');
+    console.log('Pre-caching complete. Server is warm and ready!');
+  })();
 });
 
 module.exports = app;
