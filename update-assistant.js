@@ -5,7 +5,7 @@ require('dotenv').config();
 const VAPI_API_KEY = process.env.VAPI_API_KEY;
 const VAPI_SECRET = process.env.VAPI_SECRET;
 const ASSISTANT_ID = process.argv[2]; // Pass ID as first argument
-const RAILWAY_URL = process.argv[3] || 'https://googletts-production-47b4.up.railway.app';
+const RAILWAY_URL = process.argv[3] || 'https://googletts-production-e22f.up.railway.app';
 
 if (!VAPI_API_KEY) {
     console.error('ERROR: VAPI_API_KEY is missing in .env file.');

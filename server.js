@@ -48,23 +48,20 @@ const VAPI_SECRET = process.env.VAPI_SECRET;
 // Key: md5(text + sampleRate)
 const ttsCache = new Map();
 
-// Secret validation middleware (per VAPI docs)
-function validateSecret(req, res, next) {
-  if (VAPI_SECRET) {
-    const providedSecret = req.headers['x-vapi-secret'];
-    if (providedSecret !== VAPI_SECRET) {
-      console.warn(`Auth failed from ${req.ip} - invalid secret`);
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  }
-  next();
+// Secret validation logic
+function isSecretValid(req) {
+  if (!VAPI_SECRET) return true; // No secret set, any request is fine
+  const providedSecret = req.headers['x-vapi-secret'];
+  return providedSecret === VAPI_SECRET;
 }
 
-// Request logging middleware for debugging VAPI requests
+// Request logging middleware
 function logVapiRequest(req, res, next) {
   if (process.env.DEBUG_REQUESTS === 'true') {
-    console.log('=== Incoming TTS Request ===');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('=== Incoming Request ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Has Secret:', !!req.headers['x-vapi-secret']);
     console.log('Body:', JSON.stringify(req.body, null, 2));
     console.log('==============================');
   }
@@ -109,8 +106,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// Main TTS endpoint (with VAPI authentication and logging middleware)
-app.post('/api/synthesize', validateSecret, logVapiRequest, async (req, res) => {
+// Main TTS endpoint (with logging middleware)
+app.post('/api/synthesize', logVapiRequest, async (req, res) => {
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
 
@@ -122,9 +119,6 @@ app.post('/api/synthesize', validateSecret, logVapiRequest, async (req, res) => 
   }, 30000);
 
   try {
-    console.log(`TTS request started: ${requestId}`);
-
-    // Extract and validate the request
     const { message } = req.body;
     if (!message) {
       clearTimeout(timeout);
@@ -133,12 +127,21 @@ app.post('/api/synthesize', validateSecret, logVapiRequest, async (req, res) => 
 
     const { type, text, sampleRate } = message;
 
-    // Validate message type
+    // 1. Allow non-voice requests without secret check (helps with webhook noise)
     if (type !== 'voice-request') {
-      console.log(`[INFO] Received ${type} message on TTS endpoint. Ignoring with 200 OK.`);
+      console.log(`[INFO] Received ${type} message. Ignoring with 200 OK.`);
       clearTimeout(timeout);
       return res.status(200).json({ status: 'ignored' });
     }
+
+    // 2. Validate secret ONLY for actual voice requests
+    if (!isSecretValid(req)) {
+      console.warn(`[AUTH] Invalid secret for voice-request from ${req.ip}`);
+      clearTimeout(timeout);
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log(`TTS request started: ${requestId} for text: "${text ? text.substring(0, 30) : ''}..."`);
 
     // Validate text content
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -200,7 +203,12 @@ app.post('/api/synthesize', validateSecret, logVapiRequest, async (req, res) => 
   } catch (error) {
     clearTimeout(timeout);
     const duration = Date.now() - startTime;
-    console.error(`TTS failed: ${requestId}, ${duration}ms, ${error.message}`);
+    console.error(`[ERROR] TTS failed: ${requestId}, ${duration}ms`);
+    if (error.response) {
+      console.error('Google API Error:', error.response.status, JSON.stringify(error.response.data));
+    } else {
+      console.error(error.message);
+    }
 
     if (!res.headersSent) {
       res.status(500).json({ error: 'TTS synthesis failed', requestId, details: error.message });
@@ -238,11 +246,17 @@ async function synthesizeAudio(text, sampleRate) {
   // Google returns base64 encoded audioContent in the REST response
   let audioContent = Buffer.from(response.data.audioContent, 'base64');
 
-  // LINEAR16 from Google includes a 44-byte WAV header when returned
-  // We need raw PCM for Vapi, so skip the header if present
-  if (audioContent.length > 44 &&
-    audioContent.toString('utf8', 0, 4) === 'RIFF') {
+  // LINEAR16 from Google includes a WAV header. We need raw PCM for Vapi.
+  // Robustly find the 'data' chunk and skip its 8-byte header (chunk ID + size)
+  const dataPos = audioContent.indexOf('data');
+  if (dataPos !== -1) {
+    // skip 'data' (4 bytes) + chunk size (4 bytes)
+    audioContent = audioContent.slice(dataPos + 8);
+    console.log(`Stripped WAV header, raw PCM size: ${audioContent.length} bytes`);
+  } else if (audioContent.toString('utf8', 0, 4) === 'RIFF') {
+    // Fallback: if 'data' not found but it's a RIFF file, skip standard 44 bytes
     audioContent = audioContent.slice(44);
+    console.warn('WAV "data" chunk not found, falling back to 44-byte skip');
   }
 
   return audioContent;
