@@ -135,14 +135,16 @@ app.post('/api/synthesize', validateSecret, logVapiRequest, async (req, res) => 
 
     // Validate message type
     if (type !== 'voice-request') {
+      console.log(`[INFO] Received ${type} message on TTS endpoint. Ignoring with 200 OK.`);
       clearTimeout(timeout);
-      return res.status(400).json({ error: 'Invalid message type' });
+      return res.status(200).json({ status: 'ignored' });
     }
 
     // Validate text content
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      console.warn(`[WARN] Received empty text in voice-request: ${requestId}`);
       clearTimeout(timeout);
-      return res.status(400).json({ error: 'Invalid or missing text' });
+      return res.status(200).json({ status: 'empty' }); // Don't error, just return nothing
     }
 
     // Validate sample rate

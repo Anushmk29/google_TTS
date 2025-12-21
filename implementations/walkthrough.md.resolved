@@ -1,0 +1,34 @@
+# Walkthrough - First Message Relay Fix
+
+I have implemented fixes to ensure the Vapi assistant greets the caller immediately and doesn't wait for user input.
+
+## Changes Made
+
+### 1. Server Optimization ([server.js](file:///d:/Autonoetic_edge/vapi-tts-server/server.js))
+- **Headers**: Updated `Content-Type` from `application/octet-stream` to `audio/l16; rate=${sampleRate}`. This helps Vapi correctly identify and play the PCM audio stream.
+- **Logging**: Added detailed logging to identify successful synthesis and the specific text being processed.
+- **Non-blocking Pre-caching**: Changed pre-caching to run in the background. This ensures the server starts immediately and is ready to handle requests without waiting for the cache to warm up.
+
+### 2. Assistant Configuration ([update-assistant.js](file:///d:/Autonoetic_edge/vapi-tts-server/update-assistant.js))
+- Created a new script to update your existing assistant.
+- **First Message**: Explicitly sets the greeting message.
+- **Filler Injection**: Disabled filler injection (`fillerInjectionEnabled: false`) as this can sometimes cause the AI to pause or wait for a user response before playing the greeting.
+- **Timeouts**: Ensured silence timeouts are set to reasonable values.
+
+## How to Apply the Fix
+
+### Step 1: Deploy to Railway
+1. Commit and push the changes to your GitHub repository.
+2. Railway will automatically redeploy the server.
+
+### Step 2: Update the Vapi Assistant
+Run the following command in your terminal (replace `<ASSISTANT_ID>` with your actual Assistant ID from the Vapi dashboard):
+
+```bash
+node update-assistant.js <ASSISTANT_ID>
+```
+
+## Verification
+
+1. **Check Railway Logs**: Look for a log entry like `[SUCCESS] TTS ...: Served ... bytes` immediately after a call is placed.
+2. **Call Test**: Call your Twilio number. The agent should say "สวัสดีค่ะ ดิฉันชื่อโซเฟีย มีอะไรให้ช่วยไหมคะ?" immediately upon connection.

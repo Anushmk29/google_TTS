@@ -21,6 +21,11 @@ if (!ASSISTANT_ID) {
 const updateData = {
     firstMessage: "สวัสดีค่ะ ดิฉันชื่อโซเฟีย มีอะไรให้ช่วยไหมคะ?",
     // Ensure the model is primed to respond
+    transcriber: {
+        provider: "deepgram",
+        model: "nova-2",
+        language: "th"
+    },
     model: {
         provider: "openai",
         model: "gpt-4o",
@@ -46,8 +51,9 @@ const updateData = {
     // Important settings for immediate response
     silenceTimeoutSeconds: 30,
     maxDurationSeconds: 600,
-    backgroundSound: "none",
-    fillerInjectionEnabled: false // Disable to prevent delays on first message
+    backgroundSound: "off",
+    // Clear any previously set main server/webhook URL to avoid event noise
+    server: null
 };
 
 async function updateAssistant() {

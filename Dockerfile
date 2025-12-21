@@ -5,7 +5,7 @@ FROM node:18-slim
 
 # Install ffmpeg (required for audio conversion)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Create app directory
