@@ -20,6 +20,7 @@ if (!ASSISTANT_ID) {
 
 const updateData = {
     firstMessage: "สวัสดีค่ะ ดิฉันชื่อโซเฟีย มีอะไรให้ช่วยไหมคะ?",
+    firstMessageMode: "assistant-speaks-first-with-model-generated-message",
     // Ensure the model is primed to respond
     transcriber: {
         provider: "deepgram",
