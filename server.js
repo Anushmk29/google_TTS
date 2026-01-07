@@ -296,6 +296,9 @@ app.listen(PORT, async () => {
         }
       } catch (e) {
         console.warn(`Failed to pre-cache phrase: "${text}" - ${e.message}`);
+        if (e.response && e.response.data) {
+          console.error('Google API Error Details:', JSON.stringify(e.response.data, null, 2));
+        }
       }
     }
     console.log('Pre-caching complete. Server is warm and ready!');
